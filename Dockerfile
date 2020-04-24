@@ -1,14 +1,19 @@
+#   docker build --build-arg repository_password=Q1JF1DEQuyefgdzY8x
+
+ARG repository_password
+
 FROM ubuntu:16.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
+# =================================
 # built-in packages
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends software-properties-common curl \
-    && sh -c "echo 'deb http://download.opensuse.org/repositories/home:/Horst3180/xUbuntu_16.04/ /' >> /etc/apt/sources.list.d/arc-theme.list" \
-    && curl -SL http://download.opensuse.org/repositories/home:Horst3180/xUbuntu_16.04/Release.key | apt-key add - \
-    && add-apt-repository ppa:fcwu-tw/ppa \
-    && apt-get update \
+    && apt-get install -y --no-install-recommends curl python-software-properties software-properties-common \
+#    && sh -c "echo 'deb http://download.opensuse.org/repositories/home:/Horst3180/xUbuntu_16.04/ /' >> /etc/apt/sources.list.d/arc-theme.list" \
+#    && curl -SL http://download.opensuse.org/repositories/home:Horst3180/xUbuntu_16.04/Release.key | apt-key add - \
+#    && add-apt-repository ppa:fcwu-tw/ppa \
+#    && apt-get update \
     && apt-get install -y --no-install-recommends --allow-unauthenticated \
         supervisor \
         openssh-server pwgen sudo vim-tiny \
@@ -19,20 +24,26 @@ RUN apt-get update \
         nginx \
         python-pip python-dev build-essential \
         mesa-utils libgl1-mesa-dri \
-        gnome-themes-standard gtk2-engines-pixbuf gtk2-engines-murrine pinta arc-theme \
+        gnome-themes-standard gtk2-engines-pixbuf gtk2-engines-murrine pinta  \
         dbus-x11 x11-utils \
         terminator \
+		gedit \
+        dirmngr \
+        gnupg2 \		
+		nano \
+		less \
+#		arc-theme \
     && apt-get autoclean \
     && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
 
 # =================================
 # install ros (source: https://github.com/osrf/docker_images/blob/5399f380af0a7735405a4b6a07c6c40b867563bd/ros/kinetic/ubuntu/xenial/ros-core/Dockerfile)
-# install packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    dirmngr \
-    gnupg2 \
-    && rm -rf /var/lib/apt/lists/*
+
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     dirmngr \
+#     gnupg2 \
+#     && rm -rf /var/lib/apt/lists/*
 
 # setup keys
 RUN apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
@@ -57,31 +68,43 @@ RUN rosdep init \
 
 # install ros packages
 ENV ROS_DISTRO kinetic
-RUN apt-get update && apt-get install -y \
-#    ros-kinetic-ros-core=1.3.1-0* \
-    ros-kinetic-desktop-full \
-    #              A
-    #              +--- full desktop \
+RUN apt-get update && apt-get install -y  ros-kinetic-desktop-full ros-kinetic-rospack python-rosinstall-generator python-wstool python-pip  python-bloom \
     && rm -rf /var/lib/apt/lists/*
-
-# setup entrypoint
-# COPY ./ros_entrypoint.sh /
-
 
 # =================================
+# LCAS repos
 
-# user tools
-RUN apt-get update && apt-get install -y \
-    terminator \
-    gedit \
-    okular \
-    vim \
-    && rm -rf /var/lib/apt/lists/*
+# HACK: http://stackoverflow.com/questions/25193161/chfn-pam-system-error-intermittently-in-docker-hub-builds
+RUN ln -s -f /bin/true /usr/bin/chfn
+
+# Install LCAS key & Add repository
+COPY public.key /tmp/
+RUN apt-key add /tmp/public.key &&  apt-add-repository http://lcas.lincoln.ac.uk/ubuntu/main
+
+# Add restricted repository
+RUN if [ "$repository_password" ] ; then apt-add-repository https://restricted:$repository_password@lcas.lincoln.ac.uk/ubuntu/restricted; fi
+
+# Mostly for developing.
+RUN bash -c "rm -rf /etc/ros/rosdep; source /opt/ros/kinetic/setup.bash; rosdep init"
+RUN curl -o /etc/ros/rosdep/sources.list.d/20-default.list https://raw.githubusercontent.com/LCAS/rosdistro/master/rosdep/sources.list.d/20-default.list && \
+    curl -o /etc/ros/rosdep/sources.list.d/50-lcas.list https://raw.githubusercontent.com/LCAS/rosdistro/master/rosdep/sources.list.d/50-lcas.list
+RUN mkdir -p /root/.config/rosdistro/ && \
+    echo "index_url: https://raw.github.com/lcas/rosdistro/master/index.yaml" > /root/.config/rosdistro/index.yaml
+
+# Install LCAS packages
+RUN apt-get update && apt-get install -y ros-kinetic-uol-* && \
+    apt-get clean
+
+# Marc's stuff for mac stuff
+RUN curl -o /usr/local/bin/rmate https://raw.githubusercontent.com/aurora/rmate/master/rmate && chmod +x /usr/local/bin/rmate 
+RUN pip install -U tmule
 
 # tini for subreap
-ENV TINI_VERSION v0.9.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /bin/tini
-RUN chmod +x /bin/tini
+# If you are using Docker 1.13 or greater, Tini is included in Docker itself. 
+# To enable Tini, just pass the --init flag to docker run.
+#ENV TINI_VERSION v0.9.0
+#ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /bin/tini
+#RUN chmod +x /bin/tini
 
 ADD image /
 RUN pip install setuptools wheel && pip install -r /usr/lib/web/requirements.txt
