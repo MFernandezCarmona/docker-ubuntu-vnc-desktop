@@ -1,6 +1,7 @@
 #   docker build --build-arg repository_password=Q1JF1DEQuyefgdzY8x
 
 ARG repository_password
+ARG user_name
 
 FROM ubuntu:16.04
 
@@ -32,6 +33,8 @@ RUN apt-get update \
         gnupg2 \		
 		nano \
 		less \
+        aptitude \
+        tmux \
 #		arc-theme \
     && apt-get autoclean \
     && apt-get autoremove \
@@ -68,7 +71,7 @@ RUN rosdep init \
 
 # install ros packages
 ENV ROS_DISTRO kinetic
-RUN apt-get update && apt-get install -y  ros-kinetic-desktop-full ros-kinetic-rospack python-rosinstall-generator python-wstool python-pip  python-bloom \
+RUN apt-get update && apt-get install -y  ros-kinetic-desktop ros-kinetic-rospack python-rosinstall-generator python-wstool python-pip  python-bloom \
     && rm -rf /var/lib/apt/lists/*
 
 # =================================
@@ -91,22 +94,35 @@ RUN curl -o /etc/ros/rosdep/sources.list.d/20-default.list https://raw.githubuse
 RUN mkdir -p /root/.config/rosdistro/ && \
     echo "index_url: https://raw.github.com/lcas/rosdistro/master/index.yaml" > /root/.config/rosdistro/index.yaml
 
-# Install LCAS packages
-RUN apt-get update && apt-get install -y ros-kinetic-uol-* && \
-    apt-get clean
+# Install ILIAD  packages
+RUN apt-get update && apt-get install -y ros-kinetic-iliad-launch-system \
+                                         ros-kinetic-iliad-executive \
+                                         ros-kinetic-iliad-launch-manipulation \
+                                         ros-kinetic-iliad-leg-tracker \
+                                         ros-kinetic-iliad-topological \
+                                         ros-kinetic-navigation-oru \
+                                         ros-kinetic-cliffmap-ros \
+                                         ros-kinetic-cliffmap-rviz-plugin  \
+                                         iproute \ 
+                                         ros-kinetic-qsr-lib \
+                   &&  apt-get clean
+
 
 # Marc's stuff for mac stuff
 RUN curl -o /usr/local/bin/rmate https://raw.githubusercontent.com/aurora/rmate/master/rmate && chmod +x /usr/local/bin/rmate 
+# Needed in ILIAD
+RUN pip install --upgrade pip
 RUN pip install -U tmule
 
 # tini for subreap
-# If you are using Docker 1.13 or greater, Tini is included in Docker itself. 
-# To enable Tini, just pass the --init flag to docker run.
-#ENV TINI_VERSION v0.9.0
-#ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /bin/tini
-#RUN chmod +x /bin/tini
+ENV TINI_VERSION v0.9.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /bin/tini
+RUN chmod +x /bin/tini
 
+# homebrew tools
 ADD image /
+
+# more tools and dependencies
 RUN pip install setuptools wheel && pip install -r /usr/lib/web/requirements.txt
 
 RUN cp /usr/share/applications/terminator.desktop /root/Desktop
